@@ -1,135 +1,70 @@
+from fastapi import APIRouter, Query
+import math
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin } from "lucide-react";
-import DoctorCard from "./DoctorCard";
-import { useToast } from "@/hooks/use-toast";
+router = APIRouter()
 
-const NearbyDoctors = () => {
-  const [location, setLocation] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [doctors] = useState([
+# Sample doctors data
+doctors_data = [
     {
-      id: 1,
-      name: "Dr. Radhika Sen",
-      rating: 4.7,
-      clinic: "Lotus Women's Clinic",
-      address: "Delhi",
-      timings: "Mon-Sat, 10AM–6PM",
-      specialization: "PCOS Expert",
-      image: "👩‍⚕️",
-      phone: "+91-9876543210"
+        "id": 1,
+        "name": "Dr. Radhika Sen",
+        "clinic": "Lotus Women's Clinic",
+        "city": "Delhi",
+        "lat": 28.6139,
+        "lng": 77.2090,
+        "rating": 4.7,
+        "speciality": "PCOS Expert",
+        "timing": "Mon–Sat, 10AM–6PM"
     },
     {
-      id: 2,
-      name: "Dr. Nidhi Kapoor",
-      rating: 4.8,
-      clinic: "Bliss Women's Hospital",
-      address: "Mumbai",
-      timings: "Mon-Fri, 9AM–5PM",
-      specialization: "Pregnancy Support",
-      image: "👩‍⚕️",
-      phone: "+91-9876543211"
+        "id": 2,
+        "name": "Dr. Nidhi Kapoor",
+        "clinic": "Bliss Women's Hospital",
+        "city": "Mumbai",
+        "lat": 19.0760,
+        "lng": 72.8777,
+        "rating": 4.8,
+        "speciality": "Pregnancy Support",
+        "timing": "Mon–Fri, 9AM–5PM"
     },
     {
-      id: 3,
-      name: "Dr. Anjali Sharma",
-      rating: 4.6,
-      clinic: "Care Women's Center",
-      address: "Bangalore",
-      timings: "Tue-Sun, 11AM–7PM",
-      specialization: "Infection Specialist",
-      image: "👩‍⚕️",
-      phone: "+91-9876543212"
-    }
-  ]);
+        "id": 3,
+        "name": "Dr. Anjali Sharma",
+        "clinic": "Care Women’s Center",
+        "city": "Bangalore",
+        "lat": 12.9716,
+        "lng": 77.5946,
+        "rating": 4.6,
+        "speciality": "Infection Specialist",
+        "timing": "Tue–Sun, 11AM–7PM"
+    },
+]
 
-  const { toast } = useToast();
+# Haversine formula to calculate distance in kilometers
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371  # Earth radius in KM
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = math.sin(d_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
-  const handleUseLocation = () => {
-    setIsLoading(true);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-          setIsLoading(false);
-          toast({
-            title: "Location found!",
-            description: "Showing gynecologists near you",
-          });
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setIsLoading(false);
-          toast({
-            title: "Location access denied",
-            description: "Please allow location access or search manually",
-            variant: "destructive",
-          });
-        }
-      );
-    } else {
-      setIsLoading(false);
-      toast({
-        title: "Geolocation not supported",
-        description: "Please search manually",
-        variant: "destructive",
-      });
-    }
-  };
+# Endpoint to get nearby gynecologists
+@router.get("/gynecologists")
+def get_nearby_gynecologists(
+    lat: float = Query(..., description="Latitude of user"),
+    lng: float = Query(..., description="Longitude of user"),
+    radius_km: float = 100
+):
+    nearby_doctors = []
 
-  return (
-    <div className="space-y-6">
-      {/* Location Section */}
-      <Card className="bg-[#fff7f2] border-[#fde0e0]">
-        <CardHeader>
-          <CardTitle className="text-[#5c3b28] flex items-center space-x-2">
-            <MapPin className="w-5 h-5" />
-            <span>Find Gynecologists Nearby</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              onClick={handleUseLocation}
-              disabled={isLoading}
-              className="bg-[#e03131] hover:bg-[#e03131]/90 text-white rounded-full flex items-center space-x-2"
-            >
-              <MapPin className="w-4 h-4" />
-              <span>{isLoading ? "Finding location..." : "📍 Use My Location"}</span>
-            </Button>
-            {location && (
-              <div className="text-sm text-[#5c3b28]/70 flex items-center">
-                📍 Current location: {location}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+    for doc in doctors_data:
+        distance = haversine(lat, lng, doc["lat"], doc["lng"])
+        if distance <= radius_km:
+            doc_with_distance = doc.copy()
+            doc_with_distance["distance_km"] = round(distance, 2)
+            nearby_doctors.append(doc_with_distance)
 
-      {/* Doctors List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {doctors.map((doctor) => (
-          <DoctorCard key={doctor.id} doctor={doctor} />
-        ))}
-      </div>
-
-      {/* Map Placeholder */}
-      <Card className="bg-[#fff7f2] border-[#fde0e0]">
-        <CardContent className="p-6">
-          <div className="bg-[#fde0e0] rounded-lg h-64 flex items-center justify-center">
-            <div className="text-center text-[#5c3b28]/70">
-              <span className="text-4xl mb-2 block">🗺️</span>
-              <p>Interactive Map View</p>
-              <small>Showing clinic locations nearby</small>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default NearbyDoctors;
+    return sorted(nearby_doctors, key=lambda d: d["distance_km"])
