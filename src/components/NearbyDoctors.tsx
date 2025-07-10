@@ -1,70 +1,216 @@
-from fastapi import APIRouter, Query
-import math
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MapPin } from "lucide-react";
+import DoctorCard from "./DoctorCard";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-router = APIRouter()
+// Fix Leaflet's default icon path
+const customIcon = new L.Icon({
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
 
-# Sample doctors data
-doctors_data = [
+const API_BASE_URL = "http://127.0.0.1:8000";
+
+const NearbyDoctors = () => {
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const { toast } = useToast();
+
+  // 🔸 Default sample doctors for fallback
+  const defaultDoctors = [
     {
-        "id": 1,
-        "name": "Dr. Radhika Sen",
-        "clinic": "Lotus Women's Clinic",
-        "city": "Delhi",
-        "lat": 28.6139,
-        "lng": 77.2090,
-        "rating": 4.7,
-        "speciality": "PCOS Expert",
-        "timing": "Mon–Sat, 10AM–6PM"
+      id: "1",
+      name: "Dr. Neha Jain",
+      rating: 4.8,
+      clinic: "Aarogya Gynae Clinic",
+      city: "Gwalior",
+      timing: "10 AM - 1 PM",
+      speciality: "Obstetrician & Gynecologist",
+      lat: 26.2183,
+      lng: 78.1828,
     },
     {
-        "id": 2,
-        "name": "Dr. Nidhi Kapoor",
-        "clinic": "Bliss Women's Hospital",
-        "city": "Mumbai",
-        "lat": 19.0760,
-        "lng": 72.8777,
-        "rating": 4.8,
-        "speciality": "Pregnancy Support",
-        "timing": "Mon–Fri, 9AM–5PM"
+      id: "2",
+      name: "Dr. Smita Agrawal",
+      rating: 4.6,
+      clinic: "Indira IVF Hospital",
+      city: "Gwalior",
+      timing: "9:30 AM - 2 PM",
+      speciality: "IVF & Fertility Specialist",
+      lat: 26.2224,
+      lng: 78.178,
     },
     {
-        "id": 3,
-        "name": "Dr. Anjali Sharma",
-        "clinic": "Care Women’s Center",
-        "city": "Bangalore",
-        "lat": 12.9716,
-        "lng": 77.5946,
-        "rating": 4.6,
-        "speciality": "Infection Specialist",
-        "timing": "Tue–Sun, 11AM–7PM"
+      id: "3",
+      name: "Dr. Ritu Bhargava",
+      rating: 4.7,
+      clinic: "Bhargava Women’s Clinic",
+      city: "Gwalior",
+      timing: "5 PM - 8 PM",
+      speciality: "Endometriosis & Laparoscopy Expert",
+      lat: 26.2251,
+      lng: 78.1902,
     },
-]
+  ];
 
-# Haversine formula to calculate distance in kilometers
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371  # Earth radius in KM
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    d_phi = math.radians(lat2 - lat1)
-    d_lambda = math.radians(lon2 - lon1)
-    a = math.sin(d_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+  // Initially show default doctors
+  useEffect(() => {
+    setDoctors(defaultDoctors);
+  }, []);
 
-# Endpoint to get nearby gynecologists
-@router.get("/gynecologists")
-def get_nearby_gynecologists(
-    lat: float = Query(..., description="Latitude of user"),
-    lng: float = Query(..., description="Longitude of user"),
-    radius_km: float = 100
-):
-    nearby_doctors = []
+  const handleUseLocation = () => {
+  setIsLoading(true);
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({ lat: latitude, lng: longitude });
 
-    for doc in doctors_data:
-        distance = haversine(lat, lng, doc["lat"], doc["lng"])
-        if distance <= radius_km:
-            doc_with_distance = doc.copy()
-            doc_with_distance["distance_km"] = round(distance, 2)
-            nearby_doctors.append(doc_with_distance)
+        toast({
+          title: "Location found!",
+          description: "Showing gynecologists near you",
+        });
 
-    return sorted(nearby_doctors, key=lambda d: d["distance_km"])
+        const response = await axios.get(`${API_BASE_URL}/gynecologists`, {
+          params: {
+            lat: latitude,
+            lng: longitude,
+            radius_km: 100,
+          },
+        });
+
+        const data = response.data;
+        setDoctors(data.length > 0 ? data : defaultDoctors);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        setIsLoading(false);
+        toast({
+          title: "Location access denied",
+          description: "Please allow location access or search manually",
+          variant: "destructive",
+        });
+      }
+    );
+  } else {
+    setIsLoading(false);
+    toast({
+      title: "Geolocation not supported",
+      description: "Please search manually",
+      variant: "destructive",
+    });
+  }
+};
+
+  return (
+    <div className="space-y-6">
+      {/* Location Section */}
+      <Card className="bg-[#fff7f2] border-[#fde0e0]">
+        <CardHeader>
+          <CardTitle className="text-[#5c3b28] flex items-center space-x-2">
+            <MapPin className="w-5 h-5" />
+            <span>Find Gynecologists Nearby</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button
+              onClick={handleUseLocation}
+              disabled={isLoading}
+              className="bg-[#e03131] hover:bg-[#e03131]/90 text-white rounded-full flex items-center space-x-2"
+            >
+              <MapPin className="w-4 h-4" />
+              <span>{isLoading ? "Finding location..." : "📍 Use My Location"}</span>
+            </Button>
+            {location && (
+              <div className="text-sm text-[#5c3b28]/70 flex items-center">
+                📍 Current location: {location.lat.toFixed(2)}, {location.lng.toFixed(2)}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Doctor Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {doctors.map((doctor: any) => (
+          <DoctorCard
+            key={doctor.id}
+            doctor={{
+              id: doctor.id,
+              name: doctor.name,
+              rating: doctor.rating,
+              clinic: doctor.clinic,
+              address: doctor.city,
+              timings: doctor.timing,
+              specialization: doctor.speciality,
+              image: "👩‍⚕️",
+              phone: "+91-9876543210",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Map Section */}
+      <Card className="bg-[#fff7f2] border-[#fde0e0]">
+        <CardContent className="p-0">
+          {location ? (
+            <MapContainer
+              center={[location.lat, location.lng]}
+              zoom={12}
+              scrollWheelZoom={false}
+              style={{ height: "400px", width: "100%", borderRadius: "0.5rem" }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              {/* User Marker */}
+              <Marker position={[location.lat, location.lng]} icon={customIcon}>
+                <Popup>You are here</Popup>
+              </Marker>
+
+              {/* Doctor Markers */}
+              {doctors.map((doc: any) => (
+                <Marker
+                  key={doc.id}
+                  position={[doc.lat ?? location.lat + Math.random() * 0.02, doc.lng ?? location.lng + Math.random() * 0.02]}
+                  icon={customIcon}
+                >
+                  <Popup>
+                    <strong>{doc.name}</strong><br />
+                    {doc.clinic}, {doc.city}<br />
+                    {doc.speciality}
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-[#5c3b28]/70 text-center">
+              <div>
+                <span className="text-4xl mb-2 block">📍</span>
+                <p>Map will appear once location is detected</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default NearbyDoctors;
